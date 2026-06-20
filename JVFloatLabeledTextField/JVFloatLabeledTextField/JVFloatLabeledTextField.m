@@ -222,6 +222,33 @@ static CGFloat const kFloatingLabelHideAnimationDuration = 0.3f;
 {
     [super setAttributedText:attributedText];
     [self updateDefaultFloatingLabelFont];
+    [self setNeedsLayout];
+}
+
+- (void)setText:(NSString *)text
+{
+    [super setText:text];
+    [self updateDefaultFloatingLabelFont];
+    [self setNeedsLayout];
+}
+
+- (CGFloat)floatingLabelHeight
+{
+    if (_floatingLabel.text.length > 0) {
+        [_floatingLabel sizeToFit];
+    }
+
+    CGFloat labelHeight = _floatingLabel.bounds.size.height;
+    if (labelHeight <= 0.0f && _floatingLabel.text.length > 0) {
+        labelHeight = ceilf(_floatingLabel.font.lineHeight);
+    }
+    return labelHeight;
+}
+
+- (CGFloat)topInsetForFloatingLabel
+{
+    CGFloat topInset = ceilf([self floatingLabelHeight] + _placeholderYPadding);
+    return MIN(topInset, [self maxTopInset]);
 }
 
 - (CGSize)intrinsicContentSize
@@ -294,8 +321,7 @@ static CGFloat const kFloatingLabelHideAnimationDuration = 0.3f;
 
 - (CGRect)insetRectForBounds:(CGRect)rect
 {
-    CGFloat topInset = ceilf(_floatingLabel.bounds.size.height + _placeholderYPadding);
-    topInset = MIN(topInset, [self maxTopInset]);
+    CGFloat topInset = [self topInsetForFloatingLabel];
     return CGRectMake(rect.origin.x, rect.origin.y + topInset / 2.0f, rect.size.width, rect.size.height);
 }
 
@@ -306,8 +332,7 @@ static CGFloat const kFloatingLabelHideAnimationDuration = 0.3f;
     	&& _floatingLabel.text.length // for when there is no floating title label text
 	) {
         if ([self.text length] || self.keepBaseline) {
-            CGFloat topInset = ceilf(_floatingLabel.font.lineHeight + _placeholderYPadding);
-            topInset = MIN(topInset, [self maxTopInset]);
+            CGFloat topInset = [self topInsetForFloatingLabel];
             rect = CGRectMake(rect.origin.x, rect.origin.y + topInset / 2.0f, rect.size.width, rect.size.height);
         }
     }
@@ -317,11 +342,12 @@ static CGFloat const kFloatingLabelHideAnimationDuration = 0.3f;
 - (CGRect)leftViewRectForBounds:(CGRect)bounds
 {
     CGRect rect = [super leftViewRectForBounds:bounds];
-    
-    CGFloat topInset = ceilf(_floatingLabel.font.lineHeight + _placeholderYPadding);
-    topInset = MIN(topInset, [self maxTopInset]);
-    rect = CGRectOffset(rect, 0, topInset / 2.0f);
-    
+
+    if ([self.text length] || self.keepBaseline || self.alwaysShowFloatingLabel) {
+        CGFloat topInset = [self topInsetForFloatingLabel];
+        rect = CGRectOffset(rect, 0, topInset / 2.0f);
+    }
+
     return rect;
 }
 
@@ -329,11 +355,12 @@ static CGFloat const kFloatingLabelHideAnimationDuration = 0.3f;
 {
     
     CGRect rect = [super rightViewRectForBounds:bounds];
-    
-    CGFloat topInset = ceilf(_floatingLabel.font.lineHeight + _placeholderYPadding);
-    topInset = MIN(topInset, [self maxTopInset]);
-    rect = CGRectOffset(rect, 0, topInset / 2.0f);
-    
+
+    if ([self.text length] || self.keepBaseline || self.alwaysShowFloatingLabel) {
+        CGFloat topInset = [self topInsetForFloatingLabel];
+        rect = CGRectOffset(rect, 0, topInset / 2.0f);
+    }
+
     return rect;
 }
 
@@ -356,17 +383,20 @@ static CGFloat const kFloatingLabelHideAnimationDuration = 0.3f;
 
 - (void)layoutSubviews
 {
-    [super layoutSubviews];
-    
-    [self setLabelOriginForTextAlignment];
-    
-    CGSize floatingLabelSize = [_floatingLabel sizeThatFits:_floatingLabel.superview.bounds.size];
-    
+    BOOL hasFloatingText = (self.text.length > 0 || self.alwaysShowFloatingLabel);
+    CGSize floatingLabelSize = [_floatingLabel sizeThatFits:self.bounds.size];
+    CGFloat labelY = hasFloatingText ?
+        _floatingLabelYPadding :
+        (_floatingLabel.font.lineHeight + _placeholderYPadding);
+
     _floatingLabel.frame = CGRectMake(_floatingLabel.frame.origin.x,
-                                      _floatingLabel.frame.origin.y,
+                                      labelY,
                                       floatingLabelSize.width,
                                       floatingLabelSize.height);
-    
+    [self setLabelOriginForTextAlignment];
+
+    [super layoutSubviews];
+
     BOOL firstResponder = self.isFirstResponder;
     _floatingLabel.textColor = (firstResponder && self.text && self.text.length > 0 ?
                                 self.labelActiveColor : self.floatingLabelTextColor);
